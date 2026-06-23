@@ -113,7 +113,7 @@
       }, 30000); 
     }
 
-function finalizarMedicion() {
+    function finalizarMedicion() {
       document.getElementById('estado').innerHTML = "Enviando datos a la base conjunta...";
       if (audioContext && audioContext.state !== 'closed') audioContext.close();
 
@@ -133,7 +133,7 @@ function finalizarMedicion() {
         promedioDb: promedio.toFixed(2)
       };
 
-      // Agregamos 'no-cors' y 'text/plain' para saltarnos el bloqueo del navegador
+      // Envío seguro en modo 'no-cors'
       fetch(URL_BACKEND, {
         method: 'POST',
         mode: 'no-cors', 
@@ -143,28 +143,7 @@ function finalizarMedicion() {
         body: JSON.stringify(datos)
       })
       .then(() => {
-        // Al usar 'no-cors' el navegador no nos deja leer la palabra "Éxito", 
-        // pero el envío se ejecuta directamente en segundo plano.
         document.getElementById('estado').innerHTML = `<strong>¡Medición completada!</strong><br>Datos enviados a la base conjunta.<br>Promedio: ${promedio.toFixed(2)} dB`;
-        document.getElementById('btnIniciar').disabled = false;
-      })
-      .catch(err => {
-        document.getElementById('estado').innerHTML = "Error de conexión al enviar.";
-        document.getElementById('btnIniciar').disabled = false;
-      });
-    }
-
-      fetch(URL_BACKEND, {
-        method: 'POST',
-        body: JSON.stringify(datos)
-      })
-      .then(res => res.text())
-      .then(respuesta => {
-        if(respuesta === "Éxito") {
-          document.getElementById('estado').innerHTML = `<strong>¡Datos guardados con éxito!</strong><br>Promedio Final: ${promedio.toFixed(2)} dB`;
-        } else {
-          document.getElementById('estado').innerHTML = `Error: ${respuesta}`;
-        }
         document.getElementById('btnIniciar').disabled = false;
       })
       .catch(err => {
