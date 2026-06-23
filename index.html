@@ -153,7 +153,26 @@
         .footer { text-align: center; font-size: 0.7rem; color: #aaa; margin-top: 16px; }
         .requerido { color: #d93025; }
         .oculto { display: none; }
-        .envio-exito { background: #e6f4ea; color: #1e7e34; padding: 8px 12px; border-radius: 10px; font-size: 0.8rem; margin: 8px 0; display: none; }
+        .envio-exito { 
+            background: #e6f4ea; 
+            color: #1e7e34; 
+            padding: 8px 12px; 
+            border-radius: 10px; 
+            font-size: 0.8rem; 
+            margin: 8px 0; 
+            display: none;
+            text-align: center;
+        }
+        .envio-error {
+            background: #fce8e6;
+            color: #c62828;
+            padding: 8px 12px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            margin: 8px 0;
+            display: none;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -162,6 +181,7 @@
     <div class="subtitulo">Medición cada 30s × 10 min</div>
 
     <div id="statusEnvio" class="envio-exito">✅ Datos guardados correctamente</div>
+    <div id="statusError" class="envio-error">❌ Error al guardar datos</div>
 
     <!-- NOMBRE DEL SITIO -->
     <label>🏷️ Nombre del sitio <span class="requerido">*</span></label>
@@ -240,7 +260,7 @@
 
 <script>
     // ============================================================
-    // CONFIGURACIÓN - URL DE APPS SCRIPT (CORREGIDA)
+    // CONFIGURACIÓN
     // ============================================================
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwanHV4Bt9IgEztNacXKU-SyH4nUspvN4jkO7W32ctvi_28z8UIZI1OiQ_-6jP3AkWQ/exec";
     
@@ -261,6 +281,8 @@
     let enProceso = false;
     let microfonoListo = false;
     let intentos = 0;
+    let temporizadorMedicion = null;
+    let intervaloContador = null;
 
     // ============================================================
     // DOM
@@ -284,6 +306,7 @@
     const medicionesLista = $('medicionesLista');
     const listaContainer = $('listaContainer');
     const statusEnvio = $('statusEnvio');
+    const statusError = $('statusError');
 
     // ============================================================
     // CLASIFICACIÓN DE RUIDO
@@ -316,6 +339,23 @@
         clasificacionDiv.style.color = clasif.color;
         barraDiv.style.width = Math.min(100, (dB / 100) * 100) + '%';
         barraDiv.style.background = clasif.color;
+    }
+
+    // ============================================================
+    // MOSTRAR ESTADO DE ENVÍO
+    // ============================================================
+    function mostrarEstado(mensaje, tipo) {
+        if (tipo === 'exito') {
+            statusEnvio.textContent = mensaje;
+            statusEnvio.style.display = 'block';
+            statusError.style.display = 'none';
+            setTimeout(() => { statusEnvio.style.display = 'none'; }, 3000);
+        } else if (tipo === 'error') {
+            statusError.textContent = mensaje;
+            statusError.style.display = 'block';
+            statusEnvio.style.display = 'none';
+            setTimeout(() => { statusError.style.display = 'none'; }, 5000);
+        }
     }
 
     // ============================================================
@@ -383,15 +423,11 @@
     }
 
     // ============================================================
-    // GUARDAR EN GOOGLE SHEETS - MÉTODO CORREGIDO
+    // GUARDAR EN GOOGLE SHEETS
     // ============================================================
     async function guardarEnGoogleSheets(datos) {
         try {
-            // Mostrar estado de envío
-            statusEnvio.style.display = 'block';
-            statusEnvio.textContent = '⏳ Enviando datos...';
-            statusEnvio.style.background = '#fff3e0';
-            statusEnvio.style.color = '#e65100';
+            console.log('Enviando datos:', datos);
             
             const response = await fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
@@ -401,36 +437,27 @@
                 body: JSON.stringify(datos)
             });
             
-            // Intentar leer la respuesta (aunque sea no-cors)
-            let respuestaTexto = '';
+            // Intentar leer la respuesta
+            let respuesta = null;
             try {
                 const texto = await response.text();
-                respuestaTexto = texto;
+                respuesta = JSON.parse(texto);
+                console.log('Respuesta:', respuesta);
             } catch (e) {
-                console.log('Respuesta no legible (modo no-cors)');
+                console.log('Respuesta no parseable:', e);
             }
             
-            statusEnvio.textContent = '✅ Datos guardados correctamente';
-            statusEnvio.style.background = '#e6f4ea';
-            statusEnvio.style.color = '#1e7e34';
-            
-            // Ocultar después de 3 segundos
-            setTimeout(() => {
-                statusEnvio.style.display = 'none';
-            }, 3000);
-            
-            return { success: true };
+            if (respuesta && respuesta.success) {
+                mostrarEstado('✅ Datos guardados correctamente', 'exito');
+                return { success: true };
+            } else {
+                mostrarEstado('⚠️ Error al guardar: ' + (respuesta?.error || 'sin respuesta'), 'error');
+                return { success: false, error: respuesta?.error || 'Sin respuesta' };
+            }
             
         } catch (error) {
-            console.error('Error guardando:', error);
-            statusEnvio.textContent = '⚠️ Error al guardar: ' + error.message;
-            statusEnvio.style.background = '#fce8e6';
-            statusEnvio.style.color = '#c62828';
-            
-            setTimeout(() => {
-                statusEnvio.style.display = 'none';
-            }, 5000);
-            
+            console.error('Error en fetch:', error);
+            mostrarEstado('❌ Error de conexión: ' + error.message, 'error');
             return { success: false, error: error.message };
         }
     }
@@ -487,7 +514,7 @@
     }
 
     // ============================================================
-    // TOMAR MEDICIÓN
+    // TOMAR MEDICIÓN (CORREGIDO - usa temporizador exacto)
     // ============================================================
     async function tomarMedicion() {
         if (!analyserNode) return;
@@ -526,11 +553,12 @@
             promedioFinal: ''
         };
         
-        try {
-            await guardarEnGoogleSheets(datos);
+        const resultado = await guardarEnGoogleSheets(datos);
+        
+        if (resultado.success) {
             estadoDiv.className = 'estado info';
             estadoDiv.innerHTML = `📊 #${medicionActual}: ${dB.toFixed(1)} dB guardado`;
-        } catch (error) {
+        } else {
             estadoDiv.className = 'estado warning';
             estadoDiv.innerHTML = `⚠️ #${medicionActual}: ${dB.toFixed(1)} dB (error al guardar)`;
         }
@@ -547,8 +575,8 @@
     // ============================================================
     async function finalizarMedicion() {
         enProceso = false;
-        clearInterval(window.intervaloMedicion);
-        clearInterval(window.intervaloContador);
+        clearInterval(temporizadorMedicion);
+        clearInterval(intervaloContador);
         
         const promedio = mediciones.reduce((a, b) => a + b, 0) / mediciones.length;
         const promedioRedondeado = Math.round(promedio * 10) / 10;
@@ -570,11 +598,7 @@
             promedioFinal: promedioRedondeado
         };
         
-        try {
-            await guardarEnGoogleSheets(datosPromedio);
-        } catch (error) {
-            console.error('Error guardando promedio:', error);
-        }
+        await guardarEnGoogleSheets(datosPromedio);
         
         estadoDiv.className = 'estado exito';
         estadoDiv.innerHTML = `✅ ¡COMPLETO! Promedio: ${promedioRedondeado} dB (${mediciones.length} mediciones)`;
@@ -585,7 +609,7 @@
     }
 
     // ============================================================
-    // INICIAR MEDICIÓN
+    // INICIAR MEDICIÓN (CORREGIDO)
     // ============================================================
     async function iniciarMedicion() {
         if (!microfonoListo) {
@@ -608,24 +632,30 @@
         btnIniciar.disabled = true;
         btnIniciar.textContent = '⏳ Midiendo...';
         
-        // Contador
+        // Contador de tiempo (10 minutos = 600 segundos)
         let tiempoRestante = INTERVALO_SEGUNDOS * TOTAL_MEDICIONES;
-        window.intervaloContador = setInterval(() => {
+        intervaloContador = setInterval(() => {
             tiempoRestante--;
             const mins = Math.floor(tiempoRestante / 60);
             const segs = tiempoRestante % 60;
             tiempoRestanteSpan.textContent = `⏱️ ${mins}:${segs.toString().padStart(2, '0')}`;
-            if (tiempoRestante <= 0) clearInterval(window.intervaloContador);
+            if (tiempoRestante <= 0) clearInterval(intervaloContador);
         }, 1000);
         
         estadoDiv.className = 'estado info';
         estadoDiv.innerHTML = `🎙️ Iniciando... (${TOTAL_MEDICIONES} cada ${INTERVALO_SEGUNDOS}s)`;
         
+        // Tomar primera medición inmediatamente
         await tomarMedicion();
         
-        window.intervaloMedicion = setInterval(async () => {
-            if (medicionActual < TOTAL_MEDICIONES) {
+        // Programar las siguientes mediciones con temporizador exacto
+        let contadorMediciones = 1;
+        temporizadorMedicion = setInterval(async () => {
+            if (contadorMediciones < TOTAL_MEDICIONES) {
+                contadorMediciones++;
                 await tomarMedicion();
+            } else {
+                clearInterval(temporizadorMedicion);
             }
         }, INTERVALO_SEGUNDOS * 1000);
     }
