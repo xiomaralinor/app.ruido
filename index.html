@@ -46,9 +46,10 @@
   </div>
 
   <script>
-    
-    const URL_BACKEND = "https://script.google.com/macros/s/AKfycbx2tA5010vvbmE7IXGilp5sYhhzEANfFU6Jd7cs7PFFHU0ht_rjWnZfZeE3dpjN97x7NA/exec"; 
-    
+    // === REEMPLAZA CON TU NUEVO ENLACE DE APPS SCRIPT ===
+    const URL_BACKEND = "https://script.google.com/macros/s/AKfycbxTTBiwfI6pPzvNM1xNZ5BznP_EfCIh48mds-7QcS-DJLFkzlkQ-X_FbZCfuIHg9PHQ/exec"; 
+    // ====================================================
+
     let latitud = ""; let longitud = ""; let lecturasDb = [];
     let audioContext; let analyser; let microphone; let javascriptNode;
 
@@ -133,21 +134,19 @@
         promedioDb: promedio.toFixed(2)
       };
 
-      // Envío seguro en modo 'no-cors'
+      // Envío forzado en segundo plano
       fetch(URL_BACKEND, {
         method: 'POST',
-        mode: 'no-cors', 
-        headers: {
-          'Content-Type': 'text/plain'
-        },
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(datos)
       })
       .then(() => {
-        document.getElementById('estado').innerHTML = `<strong>¡Medición completada!</strong><br>Datos enviados a la base conjunta.<br>Promedio: ${promedio.toFixed(2)} dB`;
+        document.getElementById('estado').innerHTML = `<strong>¡Medición enviada!</strong><br>Revisa tu Google Sheets.<br>Promedio: ${promedio.toFixed(2)} dB`;
         document.getElementById('btnIniciar').disabled = false;
       })
       .catch(err => {
-        document.getElementById('estado').innerHTML = "Error de conexión al enviar.";
+        document.getElementById('estado').innerHTML = `Error de red local.`;
         document.getElementById('btnIniciar').disabled = false;
       });
     }
