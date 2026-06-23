@@ -175,6 +175,13 @@
             display: none;
             text-align: center;
         }
+        .cuenta-regresiva {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1a73e8;
+            text-align: center;
+            margin: 8px 0;
+        }
     </style>
 </head>
 <body>
@@ -182,8 +189,8 @@
     <h1>📊 Medidor de Ruido</h1>
     <div class="subtitulo">Medición cada 30s × 10 min</div>
 
-    <div id="statusEnvio" class="envio-exito">✅ Datos guardados correctamente</div>
-    <div id="statusError" class="envio-error">❌ Error al guardar datos</div>
+    <div id="statusEnvio" class="envio-exito">✅ Datos enviados a Google Sheets</div>
+    <div id="statusError" class="envio-error">❌ Error al enviar datos</div>
 
     <!-- NOMBRE DEL SITIO -->
     <label>🏷️ Nombre del sitio <span class="requerido">*</span></label>
@@ -246,6 +253,9 @@
         <span id="tiempoRestante">⏱️ 10:00</span>
     </div>
 
+    <!-- CUENTA REGRESIVA PARA PRÓXIMA MEDICIÓN -->
+    <div id="cuentaRegresiva" class="cuenta-regresiva">⏳ 30s</div>
+
     <!-- LISTA DE MEDICIONES -->
     <div id="listaContainer" class="oculto">
         <div style="font-weight:600; margin:8px 0 4px;">📋 Mediciones:</div>
@@ -285,7 +295,8 @@
     let intentos = 0;
     let temporizadorMedicion = null;
     let intervaloContador = null;
-    let esperandoPrimera = true;
+    let intervaloCuentaRegresiva = null;
+    let segundosRestantes = 0;
 
     // ============================================================
     // DOM
@@ -310,6 +321,7 @@
     const listaContainer = $('listaContainer');
     const statusEnvio = $('statusEnvio');
     const statusError = $('statusError');
+    const cuentaRegresivaDiv = $('cuentaRegresiva');
 
     // ============================================================
     // CLASIFICACIÓN DE RUIDO
@@ -345,13 +357,12 @@
     }
 
     // ============================================================
-    // GUARDAR EN GOOGLE SHEETS - MÉTODO SIMPLE
+    // GUARDAR EN GOOGLE SHEETS
     // ============================================================
     async function guardarEnGoogleSheets(datos) {
         try {
             console.log('📤 Enviando datos:', datos);
             
-            // Método simple: enviar como JSON directamente
             const response = await fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors',
@@ -363,8 +374,6 @@
             
             console.log('📥 Datos enviados (modo no-cors)');
             
-            // En modo no-cors, no podemos leer la respuesta
-            // Pero asumimos que funcionó si no hubo error de red
             statusEnvio.textContent = '✅ Datos enviados a Google Sheets';
             statusEnvio.style.display = 'block';
             statusError.style.display = 'none';
@@ -498,7 +507,33 @@
     }
 
     // ============================================================
-    // TOMAR MEDICIÓN (CORREGIDO)
+    // INICIAR CUENTA REGRESIVA
+    // ============================================================
+    function iniciarCuentaRegresiva(segundos) {
+        segundosRestantes = segundos;
+        cuentaRegresivaDiv.textContent = `⏳ ${segundos}s`;
+        cuentaRegresivaDiv.style.display = 'block';
+        
+        if (intervaloCuentaRegresiva) {
+            clearInterval(intervaloCuentaRegresiva);
+        }
+        
+        intervaloCuentaRegresiva = setInterval(() => {
+            segundosRestantes--;
+            if (segundosRestantes > 0) {
+                cuentaRegresivaDiv.textContent = `⏳ ${segundosRestantes}s`;
+            } else {
+                cuentaRegresivaDiv.textContent = '📢 ¡Ahora!';
+                setTimeout(() => {
+                    cuentaRegresivaDiv.style.display = 'none';
+                }, 1000);
+                clearInterval(intervaloCuentaRegresiva);
+            }
+        }, 1000);
+    }
+
+    // ============================================================
+    // TOMAR MEDICIÓN
     // ============================================================
     async function tomarMedicion() {
         if (!analyserNode) return;
@@ -561,6 +596,8 @@
         enProceso = false;
         clearInterval(temporizadorMedicion);
         clearInterval(intervaloContador);
+        clearInterval(intervaloCuentaRegresiva);
+        cuentaRegresivaDiv.style.display = 'none';
         
         const promedio = mediciones.reduce((a, b) => a + b, 0) / mediciones.length;
         const promedioRedondeado = Math.round(promedio * 10) / 10;
@@ -590,10 +627,11 @@
         btnIniciar.disabled = false;
         btnIniciar.textContent = '🔄 Nueva Medición';
         listaContainer.classList.remove('oculto');
+        tiempoRestanteSpan.textContent = '⏱️ 0:00';
     }
 
     // ============================================================
-    // INICIAR MEDICIÓN (CORREGIDO - SIN SALTO)
+    // INICIAR MEDICIÓN (CORREGIDO - PRIMERA A LOS 30s)
     // ============================================================
     async function iniciarMedicion() {
         if (!microfonoListo) {
@@ -610,7 +648,6 @@
         medicionesLista.innerHTML = '';
         listaContainer.classList.add('oculto');
         sessionId = 'SES-' + Date.now();
-        esperandoPrimera = true;
         
         coordenadas = await obtenerUbicacion();
         
@@ -618,31 +655,56 @@
         btnIniciar.disabled = true;
         btnIniciar.textContent = '⏳ Midiendo...';
         
-        // Contador de tiempo
-        let tiempoRestante = INTERVALO_SEGUNDOS * TOTAL_MEDICIONES;
+        // Contador de tiempo total
+        let tiempoTotal = INTERVALO_SEGUNDOS * TOTAL_MEDICIONES;
         intervaloContador = setInterval(() => {
-            tiempoRestante--;
-            const mins = Math.floor(tiempoRestante / 60);
-            const segs = tiempoRestante % 60;
+            tiempoTotal--;
+            const mins = Math.floor(tiempoTotal / 60);
+            const segs = tiempoTotal % 60;
             tiempoRestanteSpan.textContent = `⏱️ ${mins}:${segs.toString().padStart(2, '0')}`;
-            if (tiempoRestante <= 0) clearInterval(intervaloContador);
+            if (tiempoTotal <= 0) clearInterval(intervaloContador);
         }, 1000);
         
         estadoDiv.className = 'estado info';
-        estadoDiv.innerHTML = `🎙️ Iniciando... (${TOTAL_MEDICIONES} cada ${INTERVALO_SEGUNDOS}s)`;
+        estadoDiv.innerHTML = `🎙️ Iniciando... Primera medición en ${INTERVALO_SEGUNDOS}s`;
         
-        // Tomar primera medición inmediatamente (SOLO UNA VEZ)
-        await tomarMedicion();
+        // Variable para llevar el número de medición
+        let numeroMedicion = 0;
         
-        // Programar las siguientes mediciones
-        let contadorMediciones = 1;
-        temporizadorMedicion = setInterval(async () => {
-            if (contadorMediciones < TOTAL_MEDICIONES) {
-                contadorMediciones++;
-                await tomarMedicion();
-            } else {
-                clearInterval(temporizadorMedicion);
+        // Función que toma una medición y programa la siguiente
+        async function tomarYProgramar() {
+            numeroMedicion++;
+            
+            // Tomar la medición actual
+            await tomarMedicion();
+            
+            // Si no hemos llegado a 20, programar la siguiente
+            if (numeroMedicion < TOTAL_MEDICIONES) {
+                // Mostrar cuenta regresiva
+                iniciarCuentaRegresiva(INTERVALO_SEGUNDOS);
+                estadoDiv.innerHTML = `⏳ Próxima medición en ${INTERVALO_SEGUNDOS}s... (${numeroMedicion + 1}/${TOTAL_MEDICIONES})`;
             }
+        }
+        
+        // Esperar 30 segundos para la PRIMERA medición
+        iniciarCuentaRegresiva(INTERVALO_SEGUNDOS);
+        
+        // Programar la primera medición después de 30 segundos
+        setTimeout(async () => {
+            // Tomar la primera medición
+            await tomarYProgramar();
+            
+            // Programar las siguientes mediciones cada 30 segundos
+            temporizadorMedicion = setInterval(async () => {
+                if (numeroMedicion < TOTAL_MEDICIONES) {
+                    await tomarYProgramar();
+                } else {
+                    clearInterval(temporizadorMedicion);
+                    clearInterval(intervaloCuentaRegresiva);
+                    cuentaRegresivaDiv.style.display = 'none';
+                }
+            }, INTERVALO_SEGUNDOS * 1000);
+            
         }, INTERVALO_SEGUNDOS * 1000);
     }
 
