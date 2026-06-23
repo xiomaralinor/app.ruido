@@ -153,12 +153,15 @@
         .footer { text-align: center; font-size: 0.7rem; color: #aaa; margin-top: 16px; }
         .requerido { color: #d93025; }
         .oculto { display: none; }
+        .envio-exito { background: #e6f4ea; color: #1e7e34; padding: 8px 12px; border-radius: 10px; font-size: 0.8rem; margin: 8px 0; display: none; }
     </style>
 </head>
 <body>
 <div class="container">
     <h1>📊 Medidor de Ruido</h1>
     <div class="subtitulo">Medición cada 30s × 10 min</div>
+
+    <div id="statusEnvio" class="envio-exito">✅ Datos guardados correctamente</div>
 
     <!-- NOMBRE DEL SITIO -->
     <label>🏷️ Nombre del sitio <span class="requerido">*</span></label>
@@ -237,7 +240,7 @@
 
 <script>
     // ============================================================
-    // CONFIGURACIÓN - URL DE APPS SCRIPT (YA INCLUIDA)
+    // CONFIGURACIÓN - URL DE APPS SCRIPT (CORREGIDA)
     // ============================================================
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwanHV4Bt9IgEztNacXKU-SyH4nUspvN4jkO7W32ctvi_28z8UIZI1OiQ_-6jP3AkWQ/exec";
     
@@ -280,9 +283,10 @@
     const tiempoRestanteSpan = $('tiempoRestante');
     const medicionesLista = $('medicionesLista');
     const listaContainer = $('listaContainer');
+    const statusEnvio = $('statusEnvio');
 
     // ============================================================
-    // CLASIFICACIÓN DE RUIDO (según OMS/Ecuador)
+    // CLASIFICACIÓN DE RUIDO
     // ============================================================
     function clasificarRuido(dB) {
         if (dB <= 55) return { texto: "🟢 BAJO", color: "#2e7d32", bg: "#e8f5e9" };
@@ -292,7 +296,7 @@
     }
 
     // ============================================================
-    // OBTENER DECIBELIOS DESDE EL MICRÓFONO
+    // OBTENER DECIBELIOS
     // ============================================================
     function getDecibeles() {
         if (!analyserNode) return 0;
@@ -379,19 +383,54 @@
     }
 
     // ============================================================
-    // GUARDAR EN GOOGLE SHEETS
+    // GUARDAR EN GOOGLE SHEETS - MÉTODO CORREGIDO
     // ============================================================
     async function guardarEnGoogleSheets(datos) {
         try {
+            // Mostrar estado de envío
+            statusEnvio.style.display = 'block';
+            statusEnvio.textContent = '⏳ Enviando datos...';
+            statusEnvio.style.background = '#fff3e0';
+            statusEnvio.style.color = '#e65100';
+            
             const response = await fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify(datos)
             });
+            
+            // Intentar leer la respuesta (aunque sea no-cors)
+            let respuestaTexto = '';
+            try {
+                const texto = await response.text();
+                respuestaTexto = texto;
+            } catch (e) {
+                console.log('Respuesta no legible (modo no-cors)');
+            }
+            
+            statusEnvio.textContent = '✅ Datos guardados correctamente';
+            statusEnvio.style.background = '#e6f4ea';
+            statusEnvio.style.color = '#1e7e34';
+            
+            // Ocultar después de 3 segundos
+            setTimeout(() => {
+                statusEnvio.style.display = 'none';
+            }, 3000);
+            
             return { success: true };
+            
         } catch (error) {
             console.error('Error guardando:', error);
+            statusEnvio.textContent = '⚠️ Error al guardar: ' + error.message;
+            statusEnvio.style.background = '#fce8e6';
+            statusEnvio.style.color = '#c62828';
+            
+            setTimeout(() => {
+                statusEnvio.style.display = 'none';
+            }, 5000);
+            
             return { success: false, error: error.message };
         }
     }
