@@ -253,8 +253,8 @@
         <span id="tiempoRestante">⏱️ 10:00</span>
     </div>
 
-    <!-- CUENTA REGRESIVA PARA PRÓXIMA MEDICIÓN -->
-    <div id="cuentaRegresiva" class="cuenta-regresiva">⏳ 30s</div>
+    <!-- CUENTA REGRESIVA -->
+    <div id="cuentaRegresiva" class="cuenta-regresiva" style="display:none;">⏳ 30s</div>
 
     <!-- LISTA DE MEDICIONES -->
     <div id="listaContainer" class="oculto">
@@ -293,10 +293,11 @@
     let enProceso = false;
     let microfonoListo = false;
     let intentos = 0;
-    let temporizadorMedicion = null;
+    let timeoutActual = null;
     let intervaloContador = null;
     let intervaloCuentaRegresiva = null;
     let segundosRestantes = 0;
+    let medicionEnCurso = false;
 
     // ============================================================
     // DOM
@@ -361,8 +362,6 @@
     // ============================================================
     async function guardarEnGoogleSheets(datos) {
         try {
-            console.log('📤 Enviando datos:', datos);
-            
             const response = await fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors',
@@ -372,12 +371,10 @@
                 body: JSON.stringify(datos)
             });
             
-            console.log('📥 Datos enviados (modo no-cors)');
-            
             statusEnvio.textContent = '✅ Datos enviados a Google Sheets';
             statusEnvio.style.display = 'block';
             statusError.style.display = 'none';
-            setTimeout(() => { statusEnvio.style.display = 'none'; }, 3000);
+            setTimeout(() => { statusEnvio.style.display = 'none'; }, 2000);
             
             return { success: true };
             
@@ -511,8 +508,8 @@
     // ============================================================
     function iniciarCuentaRegresiva(segundos) {
         segundosRestantes = segundos;
-        cuentaRegresivaDiv.textContent = `⏳ ${segundos}s`;
         cuentaRegresivaDiv.style.display = 'block';
+        cuentaRegresivaDiv.textContent = `⏳ ${segundos}s`;
         
         if (intervaloCuentaRegresiva) {
             clearInterval(intervaloCuentaRegresiva);
@@ -526,66 +523,81 @@
                 cuentaRegresivaDiv.textContent = '📢 ¡Ahora!';
                 setTimeout(() => {
                     cuentaRegresivaDiv.style.display = 'none';
-                }, 1000);
+                }, 1500);
                 clearInterval(intervaloCuentaRegresiva);
             }
         }, 1000);
     }
 
     // ============================================================
-    // TOMAR MEDICIÓN
+    // TOMAR MEDICIÓN (CON CONTROL DE DUPLICADOS)
     // ============================================================
     async function tomarMedicion() {
-        if (!analyserNode) return;
-        
-        const dB = getDecibeles();
-        const ahora = new Date();
-        const fecha = ahora.toLocaleDateString('es-ES');
-        const hora = ahora.toLocaleTimeString('es-ES', { hour12: false });
-        
-        medicionActual++;
-        mediciones.push(dB);
-        
-        // UI
-        const item = document.createElement('div');
-        item.className = 'medicion-item';
-        item.innerHTML = `<span>#${medicionActual}</span><span>${dB.toFixed(1)} dB</span><span>${hora}</span>`;
-        medicionesLista.appendChild(item);
-        medicionesLista.scrollTop = medicionesLista.scrollHeight;
-        
-        medicionActualSpan.textContent = `Medición ${medicionActual}/${TOTAL_MEDICIONES}`;
-        progresoFill.style.width = (medicionActual / TOTAL_MEDICIONES * 100) + '%';
-        
-        // Guardar en Google Sheets
-        const datos = {
-            id: sessionId,
-            nombreSitio: nombreSitioInput.value.trim(),
-            tipoSitio: tipoSitioSelect.value,
-            fecha: fecha,
-            hora: hora,
-            latitud: coordenadas.lat,
-            longitud: coordenadas.lng,
-            descripcion: descripcionTextarea.value.trim() || '',
-            momentoDia: momentoDiaSelect.value,
-            medicionNumero: medicionActual,
-            decibeles: Math.round(dB * 10) / 10,
-            promedioFinal: ''
-        };
-        
-        const resultado = await guardarEnGoogleSheets(datos);
-        
-        if (resultado.success) {
-            estadoDiv.className = 'estado info';
-            estadoDiv.innerHTML = `📊 #${medicionActual}: ${dB.toFixed(1)} dB enviado ✅`;
-        } else {
-            estadoDiv.className = 'estado warning';
-            estadoDiv.innerHTML = `⚠️ #${medicionActual}: ${dB.toFixed(1)} dB (error al enviar)`;
+        // Evitar que se tomen mediciones duplicadas
+        if (medicionEnCurso) {
+            console.log('⚠️ Medición en curso, ignorando llamada duplicada');
+            return;
         }
         
-        actualizarDisplay(dB);
+        medicionEnCurso = true;
         
-        if (medicionActual >= TOTAL_MEDICIONES) {
-            finalizarMedicion();
+        try {
+            if (!analyserNode) {
+                medicionEnCurso = false;
+                return;
+            }
+            
+            const dB = getDecibeles();
+            const ahora = new Date();
+            const fecha = ahora.toLocaleDateString('es-ES');
+            const hora = ahora.toLocaleTimeString('es-ES', { hour12: false });
+            
+            medicionActual++;
+            mediciones.push(dB);
+            
+            // UI
+            const item = document.createElement('div');
+            item.className = 'medicion-item';
+            item.innerHTML = `<span>#${medicionActual}</span><span>${dB.toFixed(1)} dB</span><span>${hora}</span>`;
+            medicionesLista.appendChild(item);
+            medicionesLista.scrollTop = medicionesLista.scrollHeight;
+            
+            medicionActualSpan.textContent = `Medición ${medicionActual}/${TOTAL_MEDICIONES}`;
+            progresoFill.style.width = (medicionActual / TOTAL_MEDICIONES * 100) + '%';
+            
+            // Guardar en Google Sheets
+            const datos = {
+                id: sessionId,
+                nombreSitio: nombreSitioInput.value.trim(),
+                tipoSitio: tipoSitioSelect.value,
+                fecha: fecha,
+                hora: hora,
+                latitud: coordenadas.lat,
+                longitud: coordenadas.lng,
+                descripcion: descripcionTextarea.value.trim() || '',
+                momentoDia: momentoDiaSelect.value,
+                medicionNumero: medicionActual,
+                decibeles: Math.round(dB * 10) / 10,
+                promedioFinal: ''
+            };
+            
+            await guardarEnGoogleSheets(datos);
+            
+            estadoDiv.className = 'estado info';
+            estadoDiv.innerHTML = `📊 #${medicionActual}: ${dB.toFixed(1)} dB ✅`;
+            
+            actualizarDisplay(dB);
+            
+            if (medicionActual >= TOTAL_MEDICIONES) {
+                await finalizarMedicion();
+            }
+            
+        } catch (error) {
+            console.error('Error en medición:', error);
+            estadoDiv.className = 'estado error';
+            estadoDiv.innerHTML = `❌ Error en medición #${medicionActual + 1}`;
+        } finally {
+            medicionEnCurso = false;
         }
     }
 
@@ -594,9 +606,22 @@
     // ============================================================
     async function finalizarMedicion() {
         enProceso = false;
-        clearInterval(temporizadorMedicion);
-        clearInterval(intervaloContador);
-        clearInterval(intervaloCuentaRegresiva);
+        
+        if (timeoutActual) {
+            clearTimeout(timeoutActual);
+            timeoutActual = null;
+        }
+        
+        if (intervaloContador) {
+            clearInterval(intervaloContador);
+            intervaloContador = null;
+        }
+        
+        if (intervaloCuentaRegresiva) {
+            clearInterval(intervaloCuentaRegresiva);
+            intervaloCuentaRegresiva = null;
+        }
+        
         cuentaRegresivaDiv.style.display = 'none';
         
         const promedio = mediciones.reduce((a, b) => a + b, 0) / mediciones.length;
@@ -628,10 +653,45 @@
         btnIniciar.textContent = '🔄 Nueva Medición';
         listaContainer.classList.remove('oculto');
         tiempoRestanteSpan.textContent = '⏱️ 0:00';
+        
+        medicionEnCurso = false;
     }
 
     // ============================================================
-    // INICIAR MEDICIÓN (CORREGIDO - PRIMERA A LOS 30s)
+    // PROGRAMA PRÓXIMA MEDICIÓN (EVITA DUPLICADOS)
+    // ============================================================
+    function programarProximaMedicion(numeroMedicion) {
+        if (timeoutActual) {
+            clearTimeout(timeoutActual);
+            timeoutActual = null;
+        }
+        
+        if (numeroMedicion >= TOTAL_MEDICIONES) {
+            return;
+        }
+        
+        // Mostrar cuenta regresiva
+        iniciarCuentaRegresiva(INTERVALO_SEGUNDOS);
+        estadoDiv.innerHTML = `⏳ Próxima medición en ${INTERVALO_SEGUNDOS}s... (#${numeroMedicion + 1}/${TOTAL_MEDICIONES})`;
+        
+        // Programar la siguiente medición
+        timeoutActual = setTimeout(async () => {
+            timeoutActual = null;
+            
+            // Verificar que sigamos en proceso y no haya duplicados
+            if (enProceso && !medicionEnCurso) {
+                await tomarMedicion();
+                
+                // Programar la siguiente recursivamente
+                if (medicionActual < TOTAL_MEDICIONES) {
+                    programarProximaMedicion(medicionActual);
+                }
+            }
+        }, INTERVALO_SEGUNDOS * 1000);
+    }
+
+    // ============================================================
+    // INICIAR MEDICIÓN (CORREGIDO - SIN DUPLICADOS)
     // ============================================================
     async function iniciarMedicion() {
         if (!microfonoListo) {
@@ -642,11 +702,25 @@
         if (!validarCampos()) return;
         if (enProceso) return;
         
-        // Resetear estado
+        // Resetear todo
+        if (timeoutActual) {
+            clearTimeout(timeoutActual);
+            timeoutActual = null;
+        }
+        if (intervaloContador) {
+            clearInterval(intervaloContador);
+            intervaloContador = null;
+        }
+        if (intervaloCuentaRegresiva) {
+            clearInterval(intervaloCuentaRegresiva);
+            intervaloCuentaRegresiva = null;
+        }
+        
         mediciones = [];
         medicionActual = 0;
         medicionesLista.innerHTML = '';
         listaContainer.classList.add('oculto');
+        medicionEnCurso = false;
         sessionId = 'SES-' + Date.now();
         
         coordenadas = await obtenerUbicacion();
@@ -662,49 +736,30 @@
             const mins = Math.floor(tiempoTotal / 60);
             const segs = tiempoTotal % 60;
             tiempoRestanteSpan.textContent = `⏱️ ${mins}:${segs.toString().padStart(2, '0')}`;
-            if (tiempoTotal <= 0) clearInterval(intervaloContador);
+            if (tiempoTotal <= 0) {
+                clearInterval(intervaloContador);
+                intervaloContador = null;
+            }
         }, 1000);
         
         estadoDiv.className = 'estado info';
         estadoDiv.innerHTML = `🎙️ Iniciando... Primera medición en ${INTERVALO_SEGUNDOS}s`;
         
-        // Variable para llevar el número de medición
-        let numeroMedicion = 0;
-        
-        // Función que toma una medición y programa la siguiente
-        async function tomarYProgramar() {
-            numeroMedicion++;
-            
-            // Tomar la medición actual
-            await tomarMedicion();
-            
-            // Si no hemos llegado a 20, programar la siguiente
-            if (numeroMedicion < TOTAL_MEDICIONES) {
-                // Mostrar cuenta regresiva
-                iniciarCuentaRegresiva(INTERVALO_SEGUNDOS);
-                estadoDiv.innerHTML = `⏳ Próxima medición en ${INTERVALO_SEGUNDOS}s... (${numeroMedicion + 1}/${TOTAL_MEDICIONES})`;
-            }
-        }
-        
-        // Esperar 30 segundos para la PRIMERA medición
+        // Esperar 30 segundos para la primera medición
         iniciarCuentaRegresiva(INTERVALO_SEGUNDOS);
         
         // Programar la primera medición después de 30 segundos
-        setTimeout(async () => {
-            // Tomar la primera medición
-            await tomarYProgramar();
+        timeoutActual = setTimeout(async () => {
+            timeoutActual = null;
             
-            // Programar las siguientes mediciones cada 30 segundos
-            temporizadorMedicion = setInterval(async () => {
-                if (numeroMedicion < TOTAL_MEDICIONES) {
-                    await tomarYProgramar();
-                } else {
-                    clearInterval(temporizadorMedicion);
-                    clearInterval(intervaloCuentaRegresiva);
-                    cuentaRegresivaDiv.style.display = 'none';
+            if (enProceso && !medicionEnCurso) {
+                await tomarMedicion();
+                
+                // Programar las siguientes mediciones recursivamente
+                if (medicionActual < TOTAL_MEDICIONES) {
+                    programarProximaMedicion(medicionActual);
                 }
-            }, INTERVALO_SEGUNDOS * 1000);
-            
+            }
         }, INTERVALO_SEGUNDOS * 1000);
     }
 
