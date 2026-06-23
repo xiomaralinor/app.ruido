@@ -47,7 +47,7 @@
 
   <script>
     
-    const URL_BACKEND = "https://script.google.com/macros/s/AKfycbzTPCfG8agHJTdato1lBxsU6k8nNr7sEebLUiPq-DM39AonnigkIzFJcju6_JgOaIMb/exec"; 
+    const URL_BACKEND = "https://script.google.com/macros/s/AKfycbyx-_G2TzYeGxO72BZ61pzWsAm9hYsrXRXQ4IiNw5QNEwq0sVMmxUbEjwwZMVxUbwKy/exec"; 
     
     let latitud = ""; let longitud = ""; let lecturasDb = [];
     let audioContext; let analyser; let microphone; let javascriptNode;
@@ -113,8 +113,8 @@
       }, 30000); 
     }
 
-    function finalizarMedicion() {
-      document.getElementById('estado').innerHTML = "Guardando en la base de datos...";
+function finalizarMedicion() {
+      document.getElementById('estado').innerHTML = "Enviando datos a la base conjunta...";
       if (audioContext && audioContext.state !== 'closed') audioContext.close();
 
       let suma = lecturasDb.reduce((a, b) => a + b, 0);
@@ -132,6 +132,27 @@
         lecturas: lecturasDb,
         promedioDb: promedio.toFixed(2)
       };
+
+      // Agregamos 'no-cors' y 'text/plain' para saltarnos el bloqueo del navegador
+      fetch(URL_BACKEND, {
+        method: 'POST',
+        mode: 'no-cors', 
+        headers: {
+          'Content-Type': 'text/plain'
+        },
+        body: JSON.stringify(datos)
+      })
+      .then(() => {
+        // Al usar 'no-cors' el navegador no nos deja leer la palabra "Éxito", 
+        // pero el envío se ejecuta directamente en segundo plano.
+        document.getElementById('estado').innerHTML = `<strong>¡Medición completada!</strong><br>Datos enviados a la base conjunta.<br>Promedio: ${promedio.toFixed(2)} dB`;
+        document.getElementById('btnIniciar').disabled = false;
+      })
+      .catch(err => {
+        document.getElementById('estado').innerHTML = "Error de conexión al enviar.";
+        document.getElementById('btnIniciar').disabled = false;
+      });
+    }
 
       fetch(URL_BACKEND, {
         method: 'POST',
