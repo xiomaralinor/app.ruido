@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sonometría Ambiental</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f7f6; color: #333; }
+    h2 { color: #2c3e50; font-size: 1.5em; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; font-weight: bold; margin-bottom: 5px; color: #34495e; }
+    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px; box-sizing: border-box; }
+    button { background-color: #27ae60; color: white; padding: 15px; border: none; border-radius: 5px; width: 100%; font-size: 16px; cursor: pointer; margin-top: 10px; font-weight: bold;}
+    button:disabled { background-color: #95a5a6; cursor: not-allowed; }
+    .status-box { background-color: #e8f8f5; padding: 15px; border-radius: 5px; margin-top: 20px; border-left: 5px solid #1abc9c; }
+    #coordenadasTexto { font-size: 0.9em; color: #7f8c8d; margin-top: 5px;}
+  </style>
+</head>
+<body>
+
+  <h2>Sonometría Ambiental</h2>
+  
+  <div class="form-group"><label>Nombre del sitio:</label><input type="text" id="sitio"></div>
+  <div class="form-group"><label>Tipo de sitio:</label><input type="text" id="tipoSitio"></div>
+  <div class="form-group">
+    <label>Momento del día:</label>
+    <select id="momentoDia">
+      <option value="Mañana">Mañana</option>
+      <option value="Mediodía">Mediodía</option>
+      <option value="Media Tarde">Media Tarde</option>
+    </select>
+  </div>
+  <div class="form-group"><label>Descripción:</label><textarea id="descripcion" rows="2"></textarea></div>
+  <div class="form-group">
+    <button type="button" id="btnUbicacion" onclick="obtenerUbicacion()">1. Capturar GPS</button>
+    <div id="coordenadasTexto">Latitud: --- | Longitud: ---</div>
+  </div>
+  <div class="form-group">
+    <button type="button" id="btnIniciar" onclick="iniciarMedicion()">2. Iniciar Medición (10 Min)</button>
+  </div>
+
+  <div class="status-box" id="estado">
+    <strong>Estado:</strong> Lista para iniciar...<br>
+    <strong>Progreso:</strong> <span id="contador">0</span>/20 mediciones<br>
+    <strong>Nivel actual:</strong> <span id="dbActual">0</span> dB
+  </div>
+
+  <script>
+    
+    const URL_BACKEND = "https://script.google.com/macros/s/AKfycbzTPCfG8agHJTdato1lBxsU6k8nNr7sEebLUiPq-DM39AonnigkIzFJcju6_JgOaIMb/exec"; 
+    
+    let latitud = ""; let longitud = ""; let lecturasDb = [];
+    let audioContext; let analyser; let microphone; let javascriptNode;
+
+    function obtenerUbicacion() {
+      document.getElementById('coordenadasTexto').innerText = "Obteniendo GPS...";
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          latitud = pos.coords.latitude; longitud = pos.coords.longitude;
+          document.getElementById('coordenadasTexto').innerText = `Latitud: ${latitud.toFixed(6)} | Longitud: ${longitud.toFixed(6)}`;
+        }, 
+        err => alert("Por favor, activa el GPS."), 
+        { enableHighAccuracy: true }
+      );
+    }
+
+    async function inicializarAudio() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        microphone = audioContext.createMediaStreamSource(stream);
+        javascriptNode = audioContext.createScriptProcessor(2048, 1, 1);
+        analyser.smoothingTimeConstant = 0.8; analyser.fftSize = 1024;
+        microphone.connect(analyser); analyser.connect(javascriptNode); javascriptNode.connect(audioContext.destination);
+        return true;
+      } catch (err) {
+        alert("Error de micrófono: " + err.message);
+        return false;
+      }
+    }
+
+    function obtenerNivelActual() {
+      const array = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(array);
+      let values = 0;
+      for (let i = 0; i < array.length; i++) values += (array[i] * array[i]);
+      let rms = Math.sqrt(values / array.length);
+      let db = 20 * Math.log10(rms > 0 ? rms : 1) + 40; 
+      return db > 0 ? db : 0;
+    }
+
+    async function iniciarMedicion() {
+      if (!latitud || !longitud) return alert("Faltan las coordenadas GPS.");
+      document.getElementById('btnIniciar').disabled = true;
+      document.getElementById('estado').innerHTML = "Configurando...";
+      if (!(await inicializarAudio())) return document.getElementById('btnIniciar').disabled = false;
+
+      lecturasDb = []; let medicionesRealizadas = 0;
+      document.getElementById('estado').innerHTML = "Midiendo... mantén la pantalla encendida.";
+      
+      const intervalo = setInterval(function() {
+        let dbActual = obtenerNivelActual();
+        lecturasDb.push(parseFloat(dbActual.toFixed(2))); 
+        medicionesRealizadas++;
+        document.getElementById('contador').innerText = medicionesRealizadas;
+        document.getElementById('dbActual').innerText = dbActual.toFixed(1);
+
+        if (medicionesRealizadas >= 20) {
+          clearInterval(intervalo);
+          finalizarMedicion();
+        }
+      }, 30000); 
+    }
+
+    function finalizarMedicion() {
+      document.getElementById('estado').innerHTML = "Guardando en la base de datos...";
+      if (audioContext && audioContext.state !== 'closed') audioContext.close();
+
+      let suma = lecturasDb.reduce((a, b) => a + b, 0);
+      let promedio = suma / lecturasDb.length;
+      let ahora = new Date();
+
+      let datos = {
+        sitio: document.getElementById('sitio').value,
+        tipoSitio: document.getElementById('tipoSitio').value,
+        fecha: ahora.toLocaleDateString('es-ES'),
+        hora: ahora.toLocaleTimeString('es-ES'),
+        latitud: latitud, longitud: longitud,
+        descripcion: document.getElementById('descripcion').value,
+        momentoDia: document.getElementById('momentoDia').value,
+        lecturas: lecturasDb,
+        promedioDb: promedio.toFixed(2)
+      };
+
+      fetch(URL_BACKEND, {
+        method: 'POST',
+        body: JSON.stringify(datos)
+      })
+      .then(res => res.text())
+      .then(respuesta => {
+        if(respuesta === "Éxito") {
+          document.getElementById('estado').innerHTML = `<strong>¡Datos guardados con éxito!</strong><br>Promedio Final: ${promedio.toFixed(2)} dB`;
+        } else {
+          document.getElementById('estado').innerHTML = `Error: ${respuesta}`;
+        }
+        document.getElementById('btnIniciar').disabled = false;
+      })
+      .catch(err => {
+        document.getElementById('estado').innerHTML = "Error de conexión al enviar.";
+        document.getElementById('btnIniciar').disabled = false;
+      });
+    }
+  </script>
+</body>
+</html>
