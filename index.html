@@ -1,155 +1,618 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sonometría Ambiental</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f7f6; color: #333; }
-    h2 { color: #2c3e50; font-size: 1.5em; }
-    .form-group { margin-bottom: 15px; }
-    label { display: block; font-weight: bold; margin-bottom: 5px; color: #34495e; }
-    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px; box-sizing: border-box; }
-    button { background-color: #27ae60; color: white; padding: 15px; border: none; border-radius: 5px; width: 100%; font-size: 16px; cursor: pointer; margin-top: 10px; font-weight: bold;}
-    button:disabled { background-color: #95a5a6; cursor: not-allowed; }
-    .status-box { background-color: #e8f8f5; padding: 15px; border-radius: 5px; margin-top: 20px; border-left: 5px solid #1abc9c; }
-    #coordenadasTexto { font-size: 0.9em; color: #7f8c8d; margin-top: 5px;}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Medidor de Ruido</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0b2b5c 0%, #1a73e8 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background: white;
+            border-radius: 24px;
+            padding: 30px 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 { font-size: 1.8rem; color: #0b2b5c; text-align: center; margin-bottom: 4px; }
+        .subtitulo { text-align: center; color: #888; font-size: 0.85rem; margin-bottom: 20px; }
+        label { display: block; font-weight: 600; font-size: 0.85rem; color: #333; margin-bottom: 4px; }
+        input, textarea, select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 14px;
+            font-size: 1rem;
+            margin-bottom: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+            background: white;
+        }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #1a73e8; }
+        textarea { resize: vertical; min-height: 50px; }
+        select { appearance: auto; }
+        .nivel-container {
+            background: #f5f7fa;
+            border-radius: 20px;
+            padding: 20px;
+            text-align: center;
+            margin: 16px 0;
+        }
+        #nivel { font-size: 4rem; font-weight: 700; color: #0b2b5c; }
+        #unidad { font-size: 1.2rem; color: #666; }
+        .barra-ruido {
+            width: 100%;
+            height: 10px;
+            background: #e9ecef;
+            border-radius: 20px;
+            overflow: hidden;
+            margin: 12px 0;
+        }
+        .barra-progreso {
+            height: 100%;
+            width: 0%;
+            background: #4caf50;
+            border-radius: 20px;
+            transition: width 0.15s;
+        }
+        .clasificacion {
+            display: inline-block;
+            padding: 6px 20px;
+            border-radius: 30px;
+            font-weight: 700;
+            font-size: 0.95rem;
+        }
+        .estado {
+            padding: 14px;
+            border-radius: 14px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-align: center;
+            margin: 12px 0;
+        }
+        .exito { background: #e6f4ea; color: #1e7e34; }
+        .error { background: #fce8e6; color: #c62828; }
+        .info { background: #e3f2fd; color: #0d47a1; }
+        .warning { background: #fff3e0; color: #e65100; }
+        .timer { font-size: 1.1rem; font-weight: 600; color: #1a73e8; text-align: center; margin: 8px 0; }
+        .progreso-bar {
+            width: 100%;
+            height: 18px;
+            background: #e9ecef;
+            border-radius: 30px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+        .progreso-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50, #fbc02d, #f44336);
+            width: 0%;
+            transition: width 0.5s;
+            border-radius: 30px;
+        }
+        .progreso-texto {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: #666;
+        }
+        .mediciones-lista {
+            max-height: 150px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 14px;
+            padding: 8px 12px;
+            margin: 10px 0;
+            font-size: 0.85rem;
+        }
+        .medicion-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 4px;
+            border-bottom: 1px solid #eee;
+        }
+        .medicion-item:last-child { border-bottom: none; }
+        button {
+            background: linear-gradient(135deg, #0b2b5c 0%, #1a73e8 100%);
+            color: white;
+            border: none;
+            padding: 16px 20px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            border-radius: 50px;
+            width: 100%;
+            margin-top: 8px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-microfono {
+            background: #d93025;
+            margin-bottom: 8px;
+        }
+        .btn-microfono.activo { background: #2e7d32; }
+        .info-ubicacion {
+            background: #e8ecf1;
+            padding: 10px 14px;
+            border-radius: 14px;
+            font-size: 0.75rem;
+            text-align: center;
+            margin-bottom: 12px;
+            color: #333;
+        }
+        hr { margin: 16px 0; border: none; border-top: 2px solid #f0f0f0; }
+        .footer { text-align: center; font-size: 0.7rem; color: #aaa; margin-top: 16px; }
+        .requerido { color: #d93025; }
+        .oculto { display: none; }
+    </style>
 </head>
 <body>
+<div class="container">
+    <h1>📊 Medidor de Ruido</h1>
+    <div class="subtitulo">Medición cada 30s × 10 min</div>
 
-  <h2>Sonometría Ambiental</h2>
-  
-  <div class="form-group"><label>Nombre del sitio:</label><input type="text" id="sitio"></div>
-  <div class="form-group"><label>Tipo de sitio:</label><input type="text" id="tipoSitio"></div>
-  <div class="form-group">
-    <label>Momento del día:</label>
-    <select id="momentoDia">
-      <option value="Mañana">Mañana</option>
-      <option value="Mediodía">Mediodía</option>
-      <option value="Media Tarde">Media Tarde</option>
+    <!-- NOMBRE DEL SITIO -->
+    <label>🏷️ Nombre del sitio <span class="requerido">*</span></label>
+    <input type="text" id="nombreSitio" placeholder="Ej: Parque Central">
+
+    <!-- TIPO DE SITIO -->
+    <label>🏢 Tipo de sitio <span class="requerido">*</span></label>
+    <select id="tipoSitio">
+        <option value="">-- Seleccionar --</option>
+        <option value="Residencial">🏠 Residencial</option>
+        <option value="Comercial">🏪 Comercial</option>
+        <option value="Industrial">🏭 Industrial</option>
+        <option value="Parque/Área verde">🌳 Parque / Área verde</option>
+        <option value="Educativo">🏫 Educativo</option>
+        <option value="Hospital/Salud">🏥 Hospital / Salud</option>
+        <option value="Oficina">🏢 Oficina</option>
+        <option value="Vía pública">🚦 Vía pública</option>
+        <option value="Otro">📌 Otro</option>
     </select>
-  </div>
-  <div class="form-group"><label>Descripción:</label><textarea id="descripcion" rows="2"></textarea></div>
-  <div class="form-group">
-    <button type="button" id="btnUbicacion" onclick="obtenerUbicacion()">1. Capturar GPS</button>
-    <div id="coordenadasTexto">Latitud: --- | Longitud: ---</div>
-  </div>
-  <div class="form-group">
-    <button type="button" id="btnIniciar" onclick="iniciarMedicion()">2. Iniciar Medición (10 Min)</button>
-  </div>
 
-  <div class="status-box" id="estado">
-    <strong>Estado:</strong> Lista para iniciar...<br>
-    <strong>Progreso:</strong> <span id="contador">0</span>/20 mediciones<br>
-    <strong>Nivel actual:</strong> <span id="dbActual">0</span> dB
-  </div>
+    <!-- DESCRIPCIÓN -->
+    <label>📝 Descripción</label>
+    <textarea id="descripcion" placeholder="Ej: Esquina norte, junto a la fuente"></textarea>
 
-  <script>
-    // === REEMPLAZA CON TU NUEVO ENLACE DE APPS SCRIPT ===
-    const URL_BACKEND = "https://script.google.com/macros/s/AKfycbxTTBiwfI6pPzvNM1xNZ5BznP_EfCIh48mds-7QcS-DJLFkzlkQ-X_FbZCfuIHg9PHQ/exec"; 
-    // ====================================================
+    <!-- MOMENTO DEL DÍA -->
+    <label>🕐 Momento del día <span class="requerido">*</span></label>
+    <select id="momentoDia">
+        <option value="Mañana (6:00-12:00)">🌅 Mañana (6:00-12:00)</option>
+        <option value="Medio día (12:00-14:00)">☀️ Medio día (12:00-14:00)</option>
+        <option value="Media tarde (14:00-18:00)">🌤️ Media tarde (14:00-18:00)</option>
+        <option value="Noche (18:00-22:00)">🌙 Noche (18:00-22:00)</option>
+    </select>
 
-    let latitud = ""; let longitud = ""; let lecturasDb = [];
-    let audioContext; let analyser; let microphone; let javascriptNode;
+    <hr>
 
-    function obtenerUbicacion() {
-      document.getElementById('coordenadasTexto').innerText = "Obteniendo GPS...";
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          latitud = pos.coords.latitude; longitud = pos.coords.longitude;
-          document.getElementById('coordenadasTexto').innerText = `Latitud: ${latitud.toFixed(6)} | Longitud: ${longitud.toFixed(6)}`;
-        }, 
-        err => alert("Por favor, activa el GPS."), 
-        { enableHighAccuracy: true }
-      );
+    <!-- UBICACIÓN AUTOMÁTICA -->
+    <div class="info-ubicacion" id="infoUbicacion">🌐 Obteniendo ubicación...</div>
+
+    <!-- BOTÓN DE MICRÓFONO -->
+    <button id="btnMicrofono" class="btn-microfono">🎤 Activar Micrófono</button>
+
+    <!-- MEDIDOR DE RUIDO -->
+    <div class="nivel-container">
+        <div>
+            <span id="nivel">--</span>
+            <span id="unidad">dB</span>
+        </div>
+        <div class="barra-ruido">
+            <div class="barra-progreso" id="barra"></div>
+        </div>
+        <div id="clasificacionTexto" class="clasificacion">Esperando...</div>
+    </div>
+
+    <!-- PROGRESO -->
+    <div class="progreso-bar">
+        <div class="progreso-fill" id="progresoFill"></div>
+    </div>
+    <div class="progreso-texto">
+        <span id="medicionActual">Medición 0/20</span>
+        <span id="tiempoRestante">⏱️ 10:00</span>
+    </div>
+
+    <!-- LISTA DE MEDICIONES -->
+    <div id="listaContainer" class="oculto">
+        <div style="font-weight:600; margin:8px 0 4px;">📋 Mediciones:</div>
+        <div class="mediciones-lista" id="medicionesLista"></div>
+    </div>
+
+    <div id="estado" class="estado info">🔴 Active el micrófono para comenzar</div>
+    <div id="timer"></div>
+
+    <button id="btnIniciar" disabled>⏳ Active el micrófono</button>
+
+    <div class="footer">✅ Guardado automático en Google Sheets</div>
+</div>
+
+<script>
+    // ============================================================
+    // CONFIGURACIÓN - URL DE APPS SCRIPT (YA INCLUIDA)
+    // ============================================================
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwanHV4Bt9IgEztNacXKU-SyH4nUspvN4jkO7W32ctvi_28z8UIZI1OiQ_-6jP3AkWQ/exec";
+    
+    const INTERVALO_SEGUNDOS = 30;
+    const TOTAL_MEDICIONES = 20;
+
+    // ============================================================
+    // VARIABLES
+    // ============================================================
+    let mediaStream = null;
+    let audioContext = null;
+    let analyserNode = null;
+    let animationId = null;
+    let mediciones = [];
+    let medicionActual = 0;
+    let sessionId = null;
+    let coordenadas = { lat: 0, lng: 0, precision: 0 };
+    let enProceso = false;
+    let microfonoListo = false;
+    let intentos = 0;
+
+    // ============================================================
+    // DOM
+    // ============================================================
+    const $ = id => document.getElementById(id);
+    const nivelDiv = $('nivel');
+    const barraDiv = $('barra');
+    const estadoDiv = $('estado');
+    const clasificacionDiv = $('clasificacionTexto');
+    const btnIniciar = $('btnIniciar');
+    const btnMicrofono = $('btnMicrofono');
+    const timerDiv = $('timer');
+    const nombreSitioInput = $('nombreSitio');
+    const tipoSitioSelect = $('tipoSitio');
+    const descripcionTextarea = $('descripcion');
+    const momentoDiaSelect = $('momentoDia');
+    const infoUbicacionDiv = $('infoUbicacion');
+    const progresoFill = $('progresoFill');
+    const medicionActualSpan = $('medicionActual');
+    const tiempoRestanteSpan = $('tiempoRestante');
+    const medicionesLista = $('medicionesLista');
+    const listaContainer = $('listaContainer');
+
+    // ============================================================
+    // CLASIFICACIÓN DE RUIDO (según OMS/Ecuador)
+    // ============================================================
+    function clasificarRuido(dB) {
+        if (dB <= 55) return { texto: "🟢 BAJO", color: "#2e7d32", bg: "#e8f5e9" };
+        if (dB <= 65) return { texto: "🟡 MODERADO", color: "#f57f17", bg: "#fff8e1" };
+        if (dB <= 75) return { texto: "🟠 ALTO", color: "#e65100", bg: "#fff3e0" };
+        return { texto: "🔴 MUY ALTO", color: "#c62828", bg: "#ffebee" };
     }
 
-    async function inicializarAudio() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioContext.createAnalyser();
-        microphone = audioContext.createMediaStreamSource(stream);
-        javascriptNode = audioContext.createScriptProcessor(2048, 1, 1);
-        analyser.smoothingTimeConstant = 0.8; analyser.fftSize = 1024;
-        microphone.connect(analyser); analyser.connect(javascriptNode); javascriptNode.connect(audioContext.destination);
-        return true;
-      } catch (err) {
-        alert("Error de micrófono: " + err.message);
-        return false;
-      }
+    // ============================================================
+    // OBTENER DECIBELIOS DESDE EL MICRÓFONO
+    // ============================================================
+    function getDecibeles() {
+        if (!analyserNode) return 0;
+        const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
+        analyserNode.getByteFrequencyData(dataArray);
+        let suma = dataArray.reduce((a, b) => a + b, 0);
+        let promedio = suma / dataArray.length;
+        let dB = 20 + (promedio / 255) * 80;
+        return Math.round(dB * 10) / 10;
     }
 
-    function obtenerNivelActual() {
-      const array = new Uint8Array(analyser.frequencyBinCount);
-      analyser.getByteFrequencyData(array);
-      let values = 0;
-      for (let i = 0; i < array.length; i++) values += (array[i] * array[i]);
-      let rms = Math.sqrt(values / array.length);
-      let db = 20 * Math.log10(rms > 0 ? rms : 1) + 40; 
-      return db > 0 ? db : 0;
+    function actualizarDisplay(dB) {
+        nivelDiv.textContent = dB.toFixed(1);
+        const clasif = clasificarRuido(dB);
+        clasificacionDiv.textContent = clasif.texto;
+        clasificacionDiv.style.background = clasif.bg;
+        clasificacionDiv.style.color = clasif.color;
+        barraDiv.style.width = Math.min(100, (dB / 100) * 100) + '%';
+        barraDiv.style.background = clasif.color;
     }
 
-    async function iniciarMedicion() {
-      if (!latitud || !longitud) return alert("Faltan las coordenadas GPS.");
-      document.getElementById('btnIniciar').disabled = true;
-      document.getElementById('estado').innerHTML = "Configurando...";
-      if (!(await inicializarAudio())) return document.getElementById('btnIniciar').disabled = false;
+    // ============================================================
+    // ACTIVAR MICRÓFONO
+    // ============================================================
+    async function activarMicrofono() {
+        intentos++;
+        estadoDiv.className = 'estado info';
+        estadoDiv.innerHTML = `🎤 Solicitando micrófono... (Intento ${intentos})`;
+        btnMicrofono.disabled = true;
+        btnMicrofono.textContent = '⏳ Solicitando...';
 
-      lecturasDb = []; let medicionesRealizadas = 0;
-      document.getElementById('estado').innerHTML = "Midiendo... mantén la pantalla encendida.";
-      
-      const intervalo = setInterval(function() {
-        let dbActual = obtenerNivelActual();
-        lecturasDb.push(parseFloat(dbActual.toFixed(2))); 
-        medicionesRealizadas++;
-        document.getElementById('contador').innerText = medicionesRealizadas;
-        document.getElementById('dbActual').innerText = dbActual.toFixed(1);
-
-        if (medicionesRealizadas >= 20) {
-          clearInterval(intervalo);
-          finalizarMedicion();
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: { echoCancellation: false, noiseSuppression: false } 
+            });
+            
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyserNode = audioContext.createAnalyser();
+            analyserNode.fftSize = 512;
+            
+            const source = audioContext.createMediaStreamSource(stream);
+            source.connect(analyserNode);
+            mediaStream = stream;
+            
+            if (audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+            
+            microfonoListo = true;
+            intentos = 0;
+            
+            btnMicrofono.textContent = '✅ Micrófono activo';
+            btnMicrofono.classList.add('activo');
+            btnMicrofono.disabled = false;
+            btnIniciar.disabled = false;
+            btnIniciar.textContent = '🎤 Iniciar Medición (10 min)';
+            estadoDiv.className = 'estado exito';
+            estadoDiv.innerHTML = '✅ Micrófono listo. Presiona "Iniciar Medición"';
+            
+            function loop() {
+                if (analyserNode) {
+                    actualizarDisplay(getDecibeles());
+                    animationId = requestAnimationFrame(loop);
+                }
+            }
+            loop();
+            
+        } catch (error) {
+            console.error('Error:', error);
+            let mensaje = '❌ Error: ';
+            if (error.message.includes('Permission')) {
+                mensaje += 'Permiso denegado. Solución: 1) Cierra Chrome. 2) Abre la página de nuevo. 3) Ve a Ajustes → Apps → Chrome → Permisos → Micrófono → Permitir.';
+            } else {
+                mensaje += error.message;
+            }
+            estadoDiv.className = 'estado error';
+            estadoDiv.innerHTML = mensaje;
+            btnMicrofono.textContent = '🔁 Reintentar';
+            btnMicrofono.disabled = false;
+            microfonoListo = false;
+            btnIniciar.disabled = true;
+            btnIniciar.textContent = '⏳ Active el micrófono';
         }
-      }, 30000); 
     }
 
-    function finalizarMedicion() {
-      document.getElementById('estado').innerHTML = "Enviando datos a la base conjunta...";
-      if (audioContext && audioContext.state !== 'closed') audioContext.close();
-
-      let suma = lecturasDb.reduce((a, b) => a + b, 0);
-      let promedio = suma / lecturasDb.length;
-      let ahora = new Date();
-
-      let datos = {
-        sitio: document.getElementById('sitio').value,
-        tipoSitio: document.getElementById('tipoSitio').value,
-        fecha: ahora.toLocaleDateString('es-ES'),
-        hora: ahora.toLocaleTimeString('es-ES'),
-        latitud: latitud, longitud: longitud,
-        descripcion: document.getElementById('descripcion').value,
-        momentoDia: document.getElementById('momentoDia').value,
-        lecturas: lecturasDb,
-        promedioDb: promedio.toFixed(2)
-      };
-
-      // Envío forzado en segundo plano
-      fetch(URL_BACKEND, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(datos)
-      })
-      .then(() => {
-        document.getElementById('estado').innerHTML = `<strong>¡Medición enviada!</strong><br>Revisa tu Google Sheets.<br>Promedio: ${promedio.toFixed(2)} dB`;
-        document.getElementById('btnIniciar').disabled = false;
-      })
-      .catch(err => {
-        document.getElementById('estado').innerHTML = `Error de red local.`;
-        document.getElementById('btnIniciar').disabled = false;
-      });
+    // ============================================================
+    // GUARDAR EN GOOGLE SHEETS
+    // ============================================================
+    async function guardarEnGoogleSheets(datos) {
+        try {
+            const response = await fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(datos)
+            });
+            return { success: true };
+        } catch (error) {
+            console.error('Error guardando:', error);
+            return { success: false, error: error.message };
+        }
     }
-  </script>
+
+    // ============================================================
+    // OBTENER UBICACIÓN
+    // ============================================================
+    function obtenerUbicacion() {
+        return new Promise((resolve) => {
+            if (!navigator.geolocation) {
+                infoUbicacionDiv.innerHTML = '⚠️ Geolocalización no disponible';
+                resolve({ lat: 0, lng: 0, precision: 0 });
+                return;
+            }
+            infoUbicacionDiv.innerHTML = '📍 Obteniendo ubicación...';
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const coords = {
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        precision: Math.round(pos.coords.accuracy)
+                    };
+                    infoUbicacionDiv.innerHTML = `📍 ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)} (±${coords.precision}m)`;
+                    resolve(coords);
+                },
+                () => {
+                    infoUbicacionDiv.innerHTML = '⚠️ Ubicación no disponible (usando 0,0)';
+                    resolve({ lat: 0, lng: 0, precision: 0 });
+                },
+                { enableHighAccuracy: true, timeout: 8000 }
+            );
+        });
+    }
+
+    // ============================================================
+    // VALIDAR CAMPOS
+    // ============================================================
+    function validarCampos() {
+        const nombre = nombreSitioInput.value.trim();
+        if (!nombre) {
+            estadoDiv.className = 'estado error';
+            estadoDiv.innerHTML = '⚠️ Ingrese el NOMBRE DEL SITIO';
+            nombreSitioInput.focus();
+            return false;
+        }
+        const tipo = tipoSitioSelect.value;
+        if (!tipo) {
+            estadoDiv.className = 'estado error';
+            estadoDiv.innerHTML = '⚠️ Seleccione el TIPO DE SITIO';
+            tipoSitioSelect.focus();
+            return false;
+        }
+        return true;
+    }
+
+    // ============================================================
+    // TOMAR MEDICIÓN
+    // ============================================================
+    async function tomarMedicion() {
+        if (!analyserNode) return;
+        
+        const dB = getDecibeles();
+        const ahora = new Date();
+        const fecha = ahora.toLocaleDateString('es-ES');
+        const hora = ahora.toLocaleTimeString('es-ES', { hour12: false });
+        
+        medicionActual++;
+        mediciones.push(dB);
+        
+        // UI
+        const item = document.createElement('div');
+        item.className = 'medicion-item';
+        item.innerHTML = `<span>#${medicionActual}</span><span>${dB.toFixed(1)} dB</span><span>${hora}</span>`;
+        medicionesLista.appendChild(item);
+        medicionesLista.scrollTop = medicionesLista.scrollHeight;
+        
+        medicionActualSpan.textContent = `Medición ${medicionActual}/${TOTAL_MEDICIONES}`;
+        progresoFill.style.width = (medicionActual / TOTAL_MEDICIONES * 100) + '%';
+        
+        // Guardar en Google Sheets
+        const datos = {
+            id: sessionId,
+            nombreSitio: nombreSitioInput.value.trim(),
+            tipoSitio: tipoSitioSelect.value,
+            fecha: fecha,
+            hora: hora,
+            latitud: coordenadas.lat,
+            longitud: coordenadas.lng,
+            descripcion: descripcionTextarea.value.trim() || '',
+            momentoDia: momentoDiaSelect.value,
+            medicionNumero: medicionActual,
+            decibeles: Math.round(dB * 10) / 10,
+            promedioFinal: ''
+        };
+        
+        try {
+            await guardarEnGoogleSheets(datos);
+            estadoDiv.className = 'estado info';
+            estadoDiv.innerHTML = `📊 #${medicionActual}: ${dB.toFixed(1)} dB guardado`;
+        } catch (error) {
+            estadoDiv.className = 'estado warning';
+            estadoDiv.innerHTML = `⚠️ #${medicionActual}: ${dB.toFixed(1)} dB (error al guardar)`;
+        }
+        
+        actualizarDisplay(dB);
+        
+        if (medicionActual >= TOTAL_MEDICIONES) {
+            finalizarMedicion();
+        }
+    }
+
+    // ============================================================
+    // FINALIZAR MEDICIÓN
+    // ============================================================
+    async function finalizarMedicion() {
+        enProceso = false;
+        clearInterval(window.intervaloMedicion);
+        clearInterval(window.intervaloContador);
+        
+        const promedio = mediciones.reduce((a, b) => a + b, 0) / mediciones.length;
+        const promedioRedondeado = Math.round(promedio * 10) / 10;
+        
+        // Guardar promedio
+        const ahora = new Date();
+        const datosPromedio = {
+            id: sessionId + '-PROM',
+            nombreSitio: nombreSitioInput.value.trim(),
+            tipoSitio: tipoSitioSelect.value,
+            fecha: ahora.toLocaleDateString('es-ES'),
+            hora: ahora.toLocaleTimeString('es-ES', { hour12: false }),
+            latitud: coordenadas.lat,
+            longitud: coordenadas.lng,
+            descripcion: 'PROMEDIO FINAL',
+            momentoDia: momentoDiaSelect.value,
+            medicionNumero: '---',
+            decibeles: promedioRedondeado,
+            promedioFinal: promedioRedondeado
+        };
+        
+        try {
+            await guardarEnGoogleSheets(datosPromedio);
+        } catch (error) {
+            console.error('Error guardando promedio:', error);
+        }
+        
+        estadoDiv.className = 'estado exito';
+        estadoDiv.innerHTML = `✅ ¡COMPLETO! Promedio: ${promedioRedondeado} dB (${mediciones.length} mediciones)`;
+        timerDiv.innerHTML = `🏆 Promedio final: ${promedioRedondeado} dB`;
+        btnIniciar.disabled = false;
+        btnIniciar.textContent = '🔄 Nueva Medición';
+        listaContainer.classList.remove('oculto');
+    }
+
+    // ============================================================
+    // INICIAR MEDICIÓN
+    // ============================================================
+    async function iniciarMedicion() {
+        if (!microfonoListo) {
+            estadoDiv.className = 'estado error';
+            estadoDiv.innerHTML = '❌ Primero activa el micrófono';
+            return;
+        }
+        if (!validarCampos()) return;
+        if (enProceso) return;
+        
+        mediciones = [];
+        medicionActual = 0;
+        medicionesLista.innerHTML = '';
+        listaContainer.classList.add('oculto');
+        sessionId = 'SES-' + Date.now();
+        
+        coordenadas = await obtenerUbicacion();
+        
+        enProceso = true;
+        btnIniciar.disabled = true;
+        btnIniciar.textContent = '⏳ Midiendo...';
+        
+        // Contador
+        let tiempoRestante = INTERVALO_SEGUNDOS * TOTAL_MEDICIONES;
+        window.intervaloContador = setInterval(() => {
+            tiempoRestante--;
+            const mins = Math.floor(tiempoRestante / 60);
+            const segs = tiempoRestante % 60;
+            tiempoRestanteSpan.textContent = `⏱️ ${mins}:${segs.toString().padStart(2, '0')}`;
+            if (tiempoRestante <= 0) clearInterval(window.intervaloContador);
+        }, 1000);
+        
+        estadoDiv.className = 'estado info';
+        estadoDiv.innerHTML = `🎙️ Iniciando... (${TOTAL_MEDICIONES} cada ${INTERVALO_SEGUNDOS}s)`;
+        
+        await tomarMedicion();
+        
+        window.intervaloMedicion = setInterval(async () => {
+            if (medicionActual < TOTAL_MEDICIONES) {
+                await tomarMedicion();
+            }
+        }, INTERVALO_SEGUNDOS * 1000);
+    }
+
+    // ============================================================
+    // EVENTOS
+    // ============================================================
+    btnMicrofono.addEventListener('click', activarMicrofono);
+    btnIniciar.addEventListener('click', iniciarMedicion);
+    
+    // Precargar ubicación
+    window.addEventListener('load', () => {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                coordenadas = {
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    precision: Math.round(pos.coords.accuracy)
+                };
+                infoUbicacionDiv.innerHTML = `📍 ${coordenadas.lat.toFixed(6)}, ${coordenadas.lng.toFixed(6)} (±${coordenadas.precision}m)`;
+            },
+            () => {
+                infoUbicacionDiv.innerHTML = '📍 Ubicación disponible al iniciar';
+            }
+        );
+    });
+</script>
 </body>
 </html>
